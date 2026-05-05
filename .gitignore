@@ -1,0 +1,21 @@
+# Environments
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+
+# Specific exclusions
+BookFiles/
+testVoiceEtc/
+ProjectContextFiles/
+
+# IDE / OS
+.vscode/
+.claude/
+.idea/
+.DS_Store
+
+# Secrets
+.env
+secrets.json

@@ -1,0 +1,275 @@
+.prose {
+  font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  color: #1a1a1a;
+  max-width: 42em;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.prose p {
+  margin: 0 0 1em 0;
+  text-indent: 0;
+}
+
+.prose p + p {
+  text-indent: 1.5em;
+  margin-top: 0;
+}
+
+.prose-editor {
+  font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  color: #1a1a1a;
+  width: 100%;
+  min-height: 300px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  padding: 2rem 1.5rem;
+  max-width: 42em;
+  margin: 0 auto;
+  display: block;
+  overflow: hidden; /* parent scrolls, not textarea */
+}
+
+.prose-editor:focus {
+  outline: none;
+}
+
+/* ─── Diff container ─────────────────────────────────────────────────────── */
+
+.diff-container {
+  display: block;
+}
+
+/* ─── Sticky toolbar ─────────────────────────────────────────────────────── */
+
+.diff-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid #e0dcd6;
+  background: #fef9e7;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+body.dark .diff-toolbar {
+  background: #2a2815;
+  border-color: #3a3a3a;
+}
+
+.diff-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.diff-stats {
+  font-family: system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: #666;
+  white-space: nowrap;
+}
+
+body.dark .diff-stats { color: #999; }
+
+.diff-stat { font-weight: 600; }
+.diff-stat-accepted { color: #2d6a4f; }
+.diff-stat-rejected { color: #9b2335; }
+.diff-stat-pending  { color: #7d5a00; }
+
+body.dark .diff-stat-accepted { color: #52b788; }
+body.dark .diff-stat-rejected { color: #e57373; }
+body.dark .diff-stat-pending  { color: #ffd166; }
+
+/* ─── Toolbar buttons ────────────────────────────────────────────────────── */
+
+.diff-btn {
+  font-family: system-ui, sans-serif;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.diff-btn:hover { opacity: 0.8; }
+
+.diff-btn-accept-all {
+  background: #d4edda;
+  color: #1a4731;
+  border-color: #b7dfc4;
+}
+
+.diff-btn-apply {
+  background: #1c5fa6;
+  color: #fff;
+  border-color: #1551a0;
+  font-weight: 600;
+}
+
+.diff-btn-discard {
+  background: #f0ece8;
+  color: #555;
+  border-color: #ddd8d3;
+}
+
+body.dark .diff-btn-accept-all { background: #1a3a26; color: #7ecf9a; border-color: #2a5038; }
+body.dark .diff-btn-apply      { background: #1c5fa6; color: #fff; }
+body.dark .diff-btn-discard    { background: #2a2a2a; color: #bbb; border-color: #444; }
+
+/* ─── Explanation bar ────────────────────────────────────────────────────── */
+
+.diff-explanation-bar {
+  font-family: system-ui, sans-serif;
+  font-size: 0.82rem;
+  color: #555;
+  background: #f5f3ef;
+  border-bottom: 1px solid #e0dcd6;
+  padding: 0.5rem 1.25rem;
+  font-style: italic;
+}
+
+body.dark .diff-explanation-bar {
+  background: #252525;
+  border-color: #333;
+  color: #aaa;
+}
+
+/* ─── Prose area ─────────────────────────────────────────────────────────── */
+
+.diff-prose {
+  font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  font-size: 1.125rem;
+  line-height: 1.75;
+  color: #1a1a1a;
+  max-width: 42em;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+body.dark .diff-prose { color: #e0dcd6; }
+
+/* ─── Change hunks ───────────────────────────────────────────────────────── */
+
+.diff-hunk {
+  display: inline;
+}
+
+/* Pending: deleted text + inserted text side by side */
+del.diff-del {
+  display: inline;
+  background: #fcc;
+  color: #7a0000;
+  text-decoration: line-through;
+  text-decoration-color: #a00;
+  text-decoration-thickness: 2px;
+  border-radius: 2px;
+  padding: 1px 2px;
+  border: 1px solid #f5b0b0;
+}
+
+ins.diff-ins {
+  display: inline;
+  background: #c6f6d5;
+  color: #1a4731;
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 1px 2px;
+  border: 1px solid #9ae6b4;
+}
+
+/* Accepted: soft green, no strikethrough */
+ins.diff-ins-done {
+  display: inline;
+  background: #ebf8f1;
+  color: #1a4731;
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 1px 2px;
+  border: 1px solid #c6f6d5;
+}
+
+/* Rejected: original text, faded */
+.diff-del-done {
+  display: inline;
+  color: #999;
+}
+
+.diff-empty {
+  font-style: italic;
+  font-size: 0.85em;
+  color: #bbb;
+}
+
+body.dark del.diff-del      { background: #4a1a1a; color: #ffb3b3; border-color: #7a2a2a; }
+body.dark ins.diff-ins      { background: #1a3a26; color: #9ae6b4; border-color: #2d6a4f; }
+body.dark ins.diff-ins-done { background: #152c1e; color: #68d391; border-color: #276749; }
+body.dark .diff-del-done    { color: #555; }
+
+/* ─── Inline accept / reject / undo controls ─────────────────────────────── */
+
+.diff-inline-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 3px;
+  vertical-align: middle;
+}
+
+.diff-ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 4px;
+  font-family: system-ui, sans-serif;
+  transition: opacity 0.12s;
+  vertical-align: middle;
+}
+
+.diff-ctrl:hover { opacity: 0.75; }
+
+.diff-ctrl-accept {
+  background: #c6f6d5;
+  color: #276749;
+  border-color: #9ae6b4;
+}
+
+.diff-ctrl-reject {
+  background: #fed7d7;
+  color: #9b2335;
+  border-color: #feb2b2;
+}
+
+.diff-ctrl-undo {
+  background: #edf2f7;
+  color: #555;
+  border-color: #cbd5e0;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+body.dark .diff-ctrl-accept { background: #1a3a26; color: #9ae6b4; border-color: #2d6a4f; }
+body.dark .diff-ctrl-reject { background: #3a1a1e; color: #fc8181; border-color: #742a2a; }
+body.dark .diff-ctrl-undo   { background: #2d3748; color: #a0aec0; border-color: #4a5568; }
