@@ -21,3 +21,8 @@ Built completely around flat `.txt` files on disk, this architecture requires no
 - **Diffing:** Word-level differential analysis for accurate prose comparison.
 
 *Note: Developed as a portfolio project. See the [CLAUDE.md](CLAUDE.md) for deeper technical architecture details.*
+
+
+---
+
+[View Project on GitHub](https://github.com/pskeough/claude-cowrite)
