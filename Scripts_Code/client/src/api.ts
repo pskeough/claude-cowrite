@@ -1,48 +1,66 @@
-import type { FileNode, Mode, AIProvider, AIModel, ClaudeResponse, ChatMessage, ProcessEvent } from './types';
+import type {
+  FileNode, Mode, AIProvider, AIModel, ClaudeResponse, ChatMessage, ProcessEvent,
+  Project, ProjectAnalysisConfig,
+} from './types';
 
 const BASE = '/api';
 
-export async function listFiles(): Promise<FileNode[]> {
-  const res = await fetch(`${BASE}/files`);
+// ---- File operations (project-scoped via ?projectId=) ----
+
+function projectParam(projectId?: string): string {
+  return projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+}
+
+export async function listFiles(projectId?: string): Promise<FileNode[]> {
+  const res = await fetch(`${BASE}/files${projectParam(projectId)}`);
   if (!res.ok) throw new Error('Failed to list files');
   return res.json();
 }
 
-export async function readFile(path: string): Promise<string> {
-  const res = await fetch(`${BASE}/files/${path}`);
-  if (!res.ok) throw new Error(`Failed to read file: ${path}`);
+export async function readFile(filePath: string, projectId?: string): Promise<string> {
+  const res = await fetch(`${BASE}/files/${filePath}${projectParam(projectId)}`);
+  if (!res.ok) throw new Error(`Failed to read file: ${filePath}`);
   const data = await res.json();
   return data.content;
 }
 
-export async function writeFile(path: string, content: string): Promise<void> {
-  const res = await fetch(`${BASE}/files/${path}`, {
+export async function writeFile(filePath: string, content: string, projectId?: string): Promise<void> {
+  const res = await fetch(`${BASE}/files/${filePath}${projectParam(projectId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
   });
-  if (!res.ok) throw new Error(`Failed to write file: ${path}`);
+  if (!res.ok) throw new Error(`Failed to write file: ${filePath}`);
 }
 
-export async function createDirectory(path: string): Promise<void> {
-  const res = await fetch(`${BASE}/files/mkdir/${path}`, {
+export async function createDirectory(dirPath: string, projectId?: string): Promise<void> {
+  const res = await fetch(`${BASE}/files/mkdir/${dirPath}${projectParam(projectId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
-  if (!res.ok) throw new Error(`Failed to create directory: ${path}`);
+  if (!res.ok) throw new Error(`Failed to create directory: ${dirPath}`);
 }
+
+// ---- AI message sending ----
 
 export async function sendMessage(
   mode: Mode,
   message: string,
-  centerPaneFile?: string,   // file path only — Claude reads it via tools
+  centerPaneFile?: string,
   leftPaneFile?: string,
   history: ChatMessage[] = [],
   model?: AIModel,
   provider?: AIProvider,
-  sessionId?: string,        // resume a prior session (analysis/context modes)
+  sessionId?: string,
   onProcess?: (event: ProcessEvent) => void,
+  projectId?: string,
 ): Promise<ClaudeResponse> {
+  const trimmedHistory = history
+    .slice(-6)
+    .map(({ role, content }) => ({ role, content: content.slice(0, 2000) }));
+
+  const directMode = mode === 'edit' && provider !== 'gemini';
+
   const res = await fetch(`${BASE}/ai`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,10 +69,12 @@ export async function sendMessage(
       message,
       centerPaneFile,
       leftPaneFile,
-      history: history.map(({ role, content }) => ({ role, content })),
+      history: trimmedHistory,
       model,
       provider,
       sessionId,
+      directMode,
+      projectId,
     }),
   });
 
@@ -91,4 +111,87 @@ export async function sendMessage(
   }
 
   throw new Error('Stream ended without a response');
+}
+
+// ---- Project management ----
+
+export async function listProjects(): Promise<Project[]> {
+  const res = await fetch(`${BASE}/projects`);
+  if (!res.ok) throw new Error('Failed to list projects');
+  return res.json();
+}
+
+export async function getProjectById(id: string): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/${id}`);
+  if (!res.ok) throw new Error('Failed to get project');
+  return res.json();
+}
+
+export async function createProject(data: {
+  name: string;
+  description?: string;
+  bookTitle?: string;
+  author?: string;
+  analysisConfig: ProjectAnalysisConfig;
+}): Promise<Project> {
+  const res = await fetch(`${BASE}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to create project' }));
+    throw new Error(err.error || 'Failed to create project');
+  }
+  return res.json();
+}
+
+export async function uploadBookFile(projectId: string, file: File): Promise<{ filename: string; size: number }> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/projects/${projectId}/upload`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error || 'Upload failed');
+  }
+  return res.json();
+}
+
+export async function splitProjectChapters(
+  projectId: string,
+  model: 'haiku' | 'sonnet' | 'opus' = 'sonnet',
+): Promise<{ chaptersCreated: number; chapterFiles: string[] }> {
+  const res = await fetch(`${BASE}/projects/${projectId}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Split failed' }));
+    throw new Error(err.error || 'Chapter split failed');
+  }
+  return res.json();
+}
+
+export async function queueProjectAnalysis(
+  projectId: string,
+  options: {
+    plotAnalysis: boolean;
+    characterProfiles: boolean;
+    voiceContext: boolean;
+    model: 'haiku' | 'sonnet' | 'opus';
+  },
+): Promise<void> {
+  const res = await fetch(`${BASE}/projects/${projectId}/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to queue analysis' }));
+    throw new Error(err.error || 'Failed to queue analysis');
+  }
 }

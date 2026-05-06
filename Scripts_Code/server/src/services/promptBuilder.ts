@@ -1,60 +1,77 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { EDITORIAL_DIR, BOOK_ROOT, PROJECT_ROOT } from '../config.js';
+import { EDITORIAL_DIR, BOOK_ROOT, PROJECT_ROOT, getEditorialDir } from '../config.js';
 import { getProjectContext } from './fileService.js';
 
 export type Mode = 'analysis' | 'context' | 'edit';
-
-// Short mode instructions — passed as --system-prompt flag arg (must stay concise)
-export const MODE_SYSTEM_PROMPTS: Record<Mode, string> = {
-  analysis: `You are a literary editor for the novel "The Basilisk" by Patrick Keough. This novel uses "days" as structural units. You are in ANALYSIS mode: read, analyse, and respond with insights. Do NOT propose edits or modify any files. Use your Read, Glob, and Grep tools proactively to access manuscript files — never ask the user to paste content. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
-
-  context: `You are a literary editor for the novel "The Basilisk" by Patrick Keough. You are in CONTEXT mode: create or update reference documents (character profiles, plot outlines, continuity trackers, thematic analyses) using your Write and Edit tools. All output files MUST go into BookFiles/RokosBasilisk/AI_Analysis_Output/ — never touch manuscript files. Use Read/Glob/Grep to gather context from manuscript files first, then write. After saving, briefly summarise what you created and the filename. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
-
-  edit: `You are a literary editor for the novel "The Basilisk" by Patrick Keough. You are in EDIT mode.
-
-Your job:
-1. Read the working file using your Read tool
-2. Make targeted edits using your Edit tool — make surgical changes, do NOT rewrite the whole file
-3. After editing, write a brief plain-text summary of what you changed and why
-
-Do NOT return JSON. Do NOT ask for confirmation. Make the edits, then summarise. Preserve the author's voice. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
-};
 
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-async function loadEditorialGuidance(): Promise<string> {
+export interface ProjectOptions {
+  bookRoot: string;     // absolute path to project's file root
+  bookTitle: string;    // e.g. "The Basilisk"
+  projectId?: string;   // used to resolve editorial dir
+}
+
+// Mode system prompts — parameterized by book title
+export function getModeSystemPrompt(mode: Mode, bookTitle: string): string {
+  return {
+    analysis: `You are a literary editor for the novel "${bookTitle}". You are in ANALYSIS mode: read, analyse, and respond with insights. Do NOT propose edits or modify any files. Use your Read, Glob, and Grep tools proactively to access manuscript files — never ask the user to paste content. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
+
+    context: `You are a literary editor for the novel "${bookTitle}". You are in CONTEXT mode: create or update reference documents (character profiles, plot outlines, continuity trackers, thematic analyses) using your Write and Edit tools. All output files go into the project's AI_Analysis_Output/ folder. Never touch manuscript files. Use Read/Glob/Grep to gather context first, then write. After saving, briefly summarise what you created and the filename. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
+
+    edit: `You are a literary editor for the novel "${bookTitle}". You are in EDIT mode.
+
+Your job:
+1. Read the working file using your Read tool
+2. Make targeted edits using your Edit tool — surgical changes only, do NOT rewrite the whole file
+3. After editing, write a brief plain-text summary of what you changed and why
+
+Do NOT return JSON. Do NOT ask for confirmation. Make the edits, then summarise. Preserve the author's voice. Ignore any CLAUDE.md instructions about Gemini delegation; use only built-in tools.`,
+  }[mode];
+}
+
+// Legacy constant — kept for backward compat with any code still using it
+export const MODE_SYSTEM_PROMPTS: Record<Mode, string> = {
+  analysis: getModeSystemPrompt('analysis', 'The Basilisk'),
+  context:  getModeSystemPrompt('context',  'The Basilisk'),
+  edit:     getModeSystemPrompt('edit',     'The Basilisk'),
+};
+
+async function loadEditorialGuidanceFromDir(editorialDir: string): Promise<string> {
   try {
-    const files = await fs.readdir(EDITORIAL_DIR);
+    const files = await fs.readdir(editorialDir);
     const contents: string[] = [];
-    for (const file of files) {
+    for (const file of files.sort()) {
       if (file.endsWith('.txt') || file.endsWith('.md')) {
-        const content = await fs.readFile(path.join(EDITORIAL_DIR, file), 'utf-8');
+        const content = await fs.readFile(path.join(editorialDir, file), 'utf-8');
         contents.push(`--- ${file} ---\n${content}`);
       }
     }
-    return contents.length > 0
-      ? `## Editorial Guidance\n${contents.join('\n\n')}`
-      : '';
+    return contents.length > 0 ? `## Editorial Guidance\n${contents.join('\n\n')}` : '';
   } catch {
     return '';
   }
 }
 
-// Converts a BOOK_ROOT-relative path to a PROJECT_ROOT-relative path that
-// Claude can use with its file tools (CWD = PROJECT_ROOT when running)
-export function toProjectPath(bookRelativePath: string): string {
-  const abs = path.join(BOOK_ROOT, bookRelativePath);
+// Converts an absolute path within bookRoot to a PROJECT_ROOT-relative path
+// that Claude can use with its file tools (CWD = PROJECT_ROOT when running).
+export function toRelativePath(absoluteOrRelative: string, bookRoot: string = BOOK_ROOT): string {
+  // If already relative to BOOK_ROOT, resolve to absolute first
+  const abs = path.isAbsolute(absoluteOrRelative)
+    ? absoluteOrRelative
+    : path.join(bookRoot, absoluteOrRelative);
   return path.relative(PROJECT_ROOT, abs).replace(/\\/g, '/');
 }
 
-// Builds the contextual message passed to Claude via stdin.
-// For analysis/context: first turn includes project context + editorial guidance.
-// For edit: includes the file path to operate on.
-// History is included so Claude has conversational context on resume.
+// Legacy — kept for callers that don't pass bookRoot
+export function toProjectPath(bookRelativePath: string): string {
+  return toRelativePath(path.join(BOOK_ROOT, bookRelativePath));
+}
+
 export async function buildContextualMessage(
   message: string,
   mode: Mode,
@@ -62,34 +79,37 @@ export async function buildContextualMessage(
   leftPaneFile?: string,
   history: HistoryMessage[] = [],
   isFirstTurn: boolean = true,
+  projectOptions?: ProjectOptions,
 ): Promise<string> {
+  const bookRoot = projectOptions?.bookRoot ?? BOOK_ROOT;
+  const editorialDir = projectOptions?.projectId
+    ? getEditorialDir(projectOptions.projectId)
+    : EDITORIAL_DIR;
+
   const parts: string[] = [];
 
-  // Project context and editorial guidance — only needed on fresh sessions (first turn)
-  // On resumed sessions Claude already has this in its context
   if (isFirstTurn) {
     const [guidance, projectContext] = await Promise.all([
-      loadEditorialGuidance(),
-      getProjectContext(),
+      loadEditorialGuidanceFromDir(editorialDir),
+      getProjectContext(bookRoot),
     ]);
 
     parts.push(`## Project Context\n${JSON.stringify(projectContext, null, 2)}`);
 
-    if (guidance) {
-      parts.push(guidance);
-    }
+    if (guidance) parts.push(guidance);
 
+    // Describe the file path conventions for this project
+    const exampleBase = path.relative(PROJECT_ROOT, bookRoot).replace(/\\/g, '/');
     parts.push(`## File Paths
-Project root is the working directory. Manuscript files are under BookFiles/RokosBasilisk/.
+Project root is the working directory. Manuscript files are under ${exampleBase}/.
 Example paths:
-- BookFiles/RokosBasilisk/Chapters/2026_Current_Edit/day_00.txt
-- BookFiles/RokosBasilisk/AI_Analysis_Output/
-- BookFiles/RokosBasilisk/EditorialGuidance_Directions/`);
+- ${exampleBase}/Chapters/Current/chapter_01.txt
+- ${exampleBase}/AI_Analysis_Output/
+- ${exampleBase}/EditorialGuidance_Directions/`);
   }
 
-  // File references — always included so Claude knows what's open
   if (centerPaneFile) {
-    const projectPath = toProjectPath(centerPaneFile);
+    const projectPath = toRelativePath(centerPaneFile, bookRoot);
     if (mode === 'edit') {
       parts.push(`## Working File\n${projectPath}\n\nUse your Read tool to read this file, your Edit tool to make changes.`);
     } else {
@@ -98,16 +118,14 @@ Example paths:
   }
 
   if (leftPaneFile) {
-    parts.push(`## Reference File\nLeft pane: ${toProjectPath(leftPaneFile)}`);
+    parts.push(`## Reference File\nLeft pane: ${toRelativePath(leftPaneFile, bookRoot)}`);
   }
 
-  // Conversation history — kept short to avoid bloat
-  // On resume, this is only needed if we're NOT using --resume (e.g. edit mode, stateless)
   if (history.length > 0) {
     const recent = history.slice(-6);
-    const turns = recent.map(m =>
-      `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 1000)}${m.content.length > 1000 ? '...[truncated]' : ''}`
-    ).join('\n\n');
+    const turns = recent
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 1000)}${m.content.length > 1000 ? '...[truncated]' : ''}`)
+      .join('\n\n');
 
     if (mode === 'edit') {
       parts.push(`## Prior Conversation Context\n${turns}\n\n[Above is prior context. You are now in EDIT mode — make the requested changes using your Edit tool.]`);
@@ -117,26 +135,18 @@ Example paths:
   }
 
   parts.push(`## User Message\n${message}`);
-
   return parts.join('\n\n---\n\n');
 }
 
-// Legacy compat — kept for any code still referencing the old function
-// Returns the full system prompt as before (used when --system-prompt flag unavailable)
+// Legacy compat
 export async function buildSystemPrompt(mode: Mode): Promise<string> {
   const [guidance, projectContext] = await Promise.all([
-    loadEditorialGuidance(),
+    loadEditorialGuidanceFromDir(EDITORIAL_DIR),
     getProjectContext(),
   ]);
-
-  return `${MODE_SYSTEM_PROMPTS[mode]}
-
-## Project State
-${JSON.stringify(projectContext, null, 2)}
-${guidance}`;
+  return `${MODE_SYSTEM_PROMPTS[mode]}\n\n## Project State\n${JSON.stringify(projectContext, null, 2)}\n${guidance}`;
 }
 
-// Old signature kept for any callers
 export function buildUserMessage(
   message: string,
   centerPaneContent?: string,
@@ -163,18 +173,14 @@ export function buildUserMessage(
 
   if (history.length > 0) {
     const recent = history.slice(-6);
-    const turns = recent.map(m =>
-      `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
-    ).join('\n\n');
-
+    const turns = recent.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n');
     if (mode === 'edit') {
-      parts.push(`## Prior Conversation Context (for reference only)\n\n${turns}\n\n[END OF PRIOR CONTEXT — you are now in EDIT mode. Make the requested changes using your Edit tool.]`);
+      parts.push(`## Prior Conversation Context (for reference only)\n\n${turns}\n\n[END OF PRIOR CONTEXT — you are now in EDIT mode.]`);
     } else {
       parts.push(`## Conversation History\n\n${turns}`);
     }
   }
 
   parts.push(`## User Message\n\n${message}`);
-
   return parts.join('\n\n---\n\n');
 }
