@@ -1,3 +1,48 @@
+// ---- Multi-project types ----
+
+export type AnalysisModel = 'haiku' | 'sonnet' | 'opus';
+
+export interface ProjectAnalysisConfig {
+  splitChapters: boolean;
+  plotAnalysis: boolean;
+  characterProfiles: boolean;
+  voiceContext: boolean;
+  model: AnalysisModel;
+}
+
+export type TaskStatus = 'none' | 'pending' | 'running' | 'done' | 'error';
+
+export interface ProjectStatus {
+  splitChapters: TaskStatus;
+  plotAnalysis: TaskStatus;
+  characterProfiles: TaskStatus;
+  voiceContext: TaskStatus;
+}
+
+export interface JobProgress {
+  currentTask: string;
+  tasksTotal: number;
+  tasksDone: number;
+  errors: string[];
+  complete: boolean;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  bookTitle: string;
+  author: string;
+  created: string;
+  lastOpened?: string;
+  rawFile?: string;
+  analysisConfig: ProjectAnalysisConfig;
+  status: ProjectStatus;
+  progress?: JobProgress | null;
+}
+
+// ---- End multi-project types ----
+
 export interface FileNode {
   name: string;
   path: string;

@@ -1,13 +1,15 @@
 import { spawn } from 'child_process';
 import {
+  getModeSystemPrompt,
   MODE_SYSTEM_PROMPTS,
   buildContextualMessage,
   type Mode,
   type HistoryMessage,
+  type ProjectOptions,
 } from './promptBuilder.js';
-import { computeWordDiff, type DiffChunk } from './diffService.js';
+import { computeWordDiffAsync, type DiffChunk } from './diffService.js';
 import { readFile as readProjectFile } from './fileService.js';
-import { PROJECT_ROOT } from '../config.js';
+import { PROJECT_ROOT, BOOK_ROOT } from '../config.js';
 
 export interface ClaudeRequest {
   mode: Mode;
@@ -17,6 +19,7 @@ export interface ClaudeRequest {
   history?: HistoryMessage[];
   model?: string;
   sessionId?: string; // --resume an existing session
+  projectOptions?: ProjectOptions; // project-aware context
 }
 
 interface AnalysisResponse {
@@ -48,6 +51,11 @@ function getModelForMode(mode: Mode): string {
   return mode === 'edit' ? 'claude-opus-4-6' : 'claude-sonnet-4-6';
 }
 
+function getSystemPromptForRequest(mode: Mode, projectOptions?: ProjectOptions): string {
+  const title = projectOptions?.bookTitle ?? 'The Basilisk';
+  return getModeSystemPrompt(mode, title);
+}
+
 export interface ProcessEvent {
   type: 'tool_call' | 'tool_result' | 'text_delta' | 'cost_info';
   tool?: string;
@@ -66,11 +74,13 @@ const MODE_ALLOWED_TOOLS: Record<Mode, string> = {
   edit:     'Read,Edit,LS',                   // targeted edits only — no new file creation
 };
 
-// Max agentic tool-call loops per mode
+// Max agentic tool-call loops per mode.
+// Edit: 5 is the right ceiling — Read(1) + Edit×3 + summary(1). If Claude needs
+// more than 5 turns for an edit, the prompt isn't working, not the turn limit.
 const MODE_MAX_TURNS: Record<Mode, number> = {
   analysis: 15,  // research can need several file reads
   context:  10,  // read then write
-  edit:     20,  // read + multiple targeted edits + verify — needs headroom
+  edit:      5,  // Read + up to 3 Edits + summary — fail fast if looping
 };
 
 interface CallResult {
@@ -251,7 +261,8 @@ export async function sendToClaude(
   signal?: AbortSignal,
 ): Promise<ClaudeResponse> {
   const model = request.model || getModelForMode(request.mode);
-  const systemPrompt = MODE_SYSTEM_PROMPTS[request.mode];
+  const systemPrompt = getSystemPromptForRequest(request.mode, request.projectOptions);
+  const bookRoot = request.projectOptions?.bookRoot ?? BOOK_ROOT;
 
   // --- EDIT MODE: file-diff approach ---
   // Claude reads the file via its Read tool, edits via its Edit tool.
@@ -262,7 +273,7 @@ export async function sendToClaude(
     }
 
     // Snapshot the file before Claude touches it (for reject/restore)
-    const originalText = await readProjectFile(request.centerPaneFile);
+    const originalText = await readProjectFile(request.centerPaneFile, bookRoot);
 
     const userMessage = await buildContextualMessage(
       request.message,
@@ -271,6 +282,7 @@ export async function sendToClaude(
       request.leftPaneFile,
       request.history,
       true, // always include project context for edit (stateless, no session)
+      request.projectOptions,
     );
 
     // Edit sessions are stateless — each edit starts fresh so Claude reads the
@@ -301,13 +313,13 @@ export async function sendToClaude(
     // Read the file after Claude's Edit tool ran
     let revisedText: string;
     try {
-      revisedText = await readProjectFile(request.centerPaneFile);
+      revisedText = await readProjectFile(request.centerPaneFile, bookRoot);
     } catch {
       revisedText = originalText;
     }
 
     if (revisedText !== originalText) {
-      const diffs = computeWordDiff(originalText, revisedText);
+      const diffs = await computeWordDiffAsync(originalText, revisedText);
       return {
         type: 'edit_proposal',
         explanation: explanation || 'Edits applied.',
@@ -336,8 +348,9 @@ export async function sendToClaude(
     request.mode,
     request.centerPaneFile,
     request.leftPaneFile,
-    isFirstTurn ? [] : (request.history ?? []), // history only needed on first turn (no resume yet) or for stateless
+    isFirstTurn ? [] : (request.history ?? []),
     isFirstTurn,
+    request.projectOptions,
   );
 
   const { text: rawResponse, sessionId } = await callClaude(

@@ -3,12 +3,16 @@ import Layout from './components/Layout';
 import LeftPane from './components/LeftPane/LeftPane';
 import CenterPane from './components/CenterPane/CenterPane';
 import RightPane from './components/RightPane/RightPane';
+import HomePage from './components/Home/HomePage';
 import { listFiles, readFile, writeFile, createDirectory, sendMessage } from './api';
-import type { FileNode, Mode, AIProvider, AIModel, ChatMessage, EditProposal, ProcessEvent } from './types';
+import type { FileNode, Mode, AIProvider, AIModel, ChatMessage, EditProposal, ProcessEvent, Project } from './types';
 
+type AppView = 'home' | 'editor';
 type ModeSessions = Record<Mode, string | null>;
 
 export default function App() {
+  const [view, setView] = useState<AppView>('home');
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [dark, setDark] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,33 +43,44 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');
-
-  // Session IDs per mode — Claude Code maintains conversation context on disk,
-  // we resume using the session_id returned from each call.
   const [sessions, setSessions] = useState<ModeSessions>({ analysis: null, context: null, edit: null });
+
+  const projectId = currentProject?.id;
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark);
   }, [dark]);
 
   const refreshFiles = useCallback(() => {
-    listFiles()
+    listFiles(projectId)
       .then(setFiles)
       .catch(err => setError(`Failed to load files: ${err.message}`));
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
-    refreshFiles();
-  }, [refreshFiles]);
+    if (view === 'editor') refreshFiles();
+  }, [view, refreshFiles]);
+
+  function handleOpenProject(project: Project) {
+    setCurrentProject(project);
+    // Reset editor state when switching projects
+    setLeftFile(null);
+    setLeftContent(null);
+    setCenterFile(null);
+    setCenterContent('');
+    setEditProposal(null);
+    setMessages([]);
+    setSessions({ analysis: null, context: null, edit: null });
+    setFiles([]);
+    setView('editor');
+  }
 
   const handleLeftFileSelect = useCallback(async (path: string) => {
-    // Flush pending left-pane saves before switching
     if (leftSaveTimerRef.current) {
       clearTimeout(leftSaveTimerRef.current);
       leftSaveTimerRef.current = null;
-      const prevFile = leftFileRef.current;
-      if (prevFile) {
-        try { await writeFile(prevFile, leftContentRef.current); } catch { /* best-effort */ }
+      if (leftFileRef.current) {
+        try { await writeFile(leftFileRef.current, leftContentRef.current, projectId); } catch { /* best-effort */ }
       }
     }
     setLeftFile(path);
@@ -73,14 +88,14 @@ export default function App() {
     setLeftContent(null);
     setLeftSaveStatus('idle');
     try {
-      const content = await readFile(path);
+      const content = await readFile(path, projectId);
       setLeftContent(content);
       leftContentRef.current = content;
       setLeftContentVersion(v => v + 1);
     } catch (err: any) {
       setError(`Failed to read file: ${err.message}`);
     }
-  }, []);
+  }, [projectId]);
 
   const handleLeftContentChange = useCallback((content: string) => {
     leftContentRef.current = content;
@@ -91,21 +106,20 @@ export default function App() {
       if (!file) return;
       setLeftSaveStatus('saving');
       try {
-        await writeFile(file, content);
+        await writeFile(file, content, projectId);
         setLeftSaveStatus('saved');
       } catch {
         setLeftSaveStatus('error');
       }
     }, 2000);
-  }, []);
+  }, [projectId]);
 
   const handleCenterFileSelect = useCallback(async (path: string) => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
-      const prevFile = centerFileRef.current;
-      if (prevFile) {
-        try { await writeFile(prevFile, centerContentRef.current); } catch { /* best-effort */ }
+      if (centerFileRef.current) {
+        try { await writeFile(centerFileRef.current, centerContentRef.current, projectId); } catch { /* best-effort */ }
       }
     }
     setCenterFile(path);
@@ -113,14 +127,14 @@ export default function App() {
     setEditProposal(null);
     setSaveStatus('idle');
     try {
-      const content = await readFile(path);
+      const content = await readFile(path, projectId);
       setCenterContent(content);
       centerContentRef.current = content;
       setContentVersion(v => v + 1);
     } catch (err: any) {
       setError(`Failed to read file: ${err.message}`);
     }
-  }, []);
+  }, [projectId]);
 
   const handleContentChange = useCallback((content: string) => {
     centerContentRef.current = content;
@@ -131,13 +145,13 @@ export default function App() {
       if (!file) return;
       setSaveStatus('saving');
       try {
-        await writeFile(file, content);
+        await writeFile(file, content, projectId);
         setSaveStatus('saved');
       } catch {
         setSaveStatus('error');
       }
     }, 2000);
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -154,19 +168,17 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
-        // Save center pane
         if (centerFile) {
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           setSaveStatus('saving');
-          writeFile(centerFile, centerContentRef.current)
+          writeFile(centerFile, centerContentRef.current, projectId)
             .then(() => setSaveStatus('saved'))
             .catch(() => setSaveStatus('error'));
         }
-        // Save left pane
         if (leftFileRef.current) {
           if (leftSaveTimerRef.current) clearTimeout(leftSaveTimerRef.current);
           setLeftSaveStatus('saving');
-          writeFile(leftFileRef.current, leftContentRef.current)
+          writeFile(leftFileRef.current, leftContentRef.current, projectId)
             .then(() => setLeftSaveStatus('saved'))
             .catch(() => setLeftSaveStatus('error'));
         }
@@ -174,12 +186,11 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [centerFile]);
+  }, [centerFile, projectId]);
 
   const handleModeChange = useCallback((newMode: Mode) => {
     setMode(newMode);
     setEditProposal(null);
-    // Preserve per-mode sessions and message history — switching modes doesn't reset context
   }, []);
 
   const handleSend = useCallback(async (message: string, onProcess?: (e: ProcessEvent) => void) => {
@@ -197,19 +208,13 @@ export default function App() {
       }
     };
 
-    // Session ID for this mode — enables --resume on the Claude Code subprocess
-    // so Claude maintains its own context natively without manual history injection.
-    // Edit mode is stateless (file-diff approach), so no session needed.
     const currentSessionId = mode !== 'edit' ? (sessions[mode] ?? undefined) : undefined;
 
-    // Edit mode: flush any pending auto-save before spawning Claude so Claude reads
-    // the latest content, and cancel the timer so it can't fire mid-flight and
-    // overwrite Claude's disk edits.
     if (mode === 'edit' && centerFile) {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
-        await writeFile(centerFile, centerContentRef.current).catch(() => {});
+        await writeFile(centerFile, centerContentRef.current, projectId).catch(() => {});
       }
     }
 
@@ -217,23 +222,21 @@ export default function App() {
       const response = await sendMessage(
         mode,
         message,
-        centerFile || undefined,   // file path only — Claude reads it via its tools
+        centerFile || undefined,
         leftFile || undefined,
         messages,
         model,
         provider,
         currentSessionId,
         wrappedOnProcess,
+        projectId,
       );
 
-      // Store session ID for this mode so subsequent calls can --resume
       if (response.sessionId && mode !== 'edit') {
         setSessions(prev => ({ ...prev, [mode]: response.sessionId! }));
       }
 
       if (response.type === 'edit_proposal') {
-        // Claude already edited the file on disk via its Edit tool.
-        // Store the proposal (with originalText for reject/restore) and sync center pane.
         setEditProposal({
           explanation: response.explanation,
           diffs: response.diffs,
@@ -253,10 +256,7 @@ export default function App() {
           content: response.response,
           timestamp: Date.now(),
         }]);
-        // Refresh file tree after context mode — Claude may have written new files to disk
-        if (mode === 'context') {
-          refreshFiles();
-        }
+        if (mode === 'context') refreshFiles();
       }
     } catch (err: any) {
       setMessages(prev => [...prev, {
@@ -268,9 +268,8 @@ export default function App() {
       setLoading(false);
       setStreamingText('');
     }
-  }, [mode, provider, model, messages, sessions, centerFile, leftFile, refreshFiles]);
+  }, [mode, provider, model, messages, sessions, centerFile, leftFile, projectId, refreshFiles]);
 
-  // Apply diff — writes the user's final text (from per-hunk accept/reject decisions) to disk.
   const handleApplyDiff = useCallback(async (finalText: string) => {
     setEditProposal(null);
     setCenterContent(finalText);
@@ -279,12 +278,12 @@ export default function App() {
     if (!centerFile) return;
     setSaveStatus('saving');
     try {
-      await writeFile(centerFile, finalText);
+      await writeFile(centerFile, finalText, projectId);
       setSaveStatus('saved');
     } catch {
       setSaveStatus('error');
     }
-  }, [centerFile]);
+  }, [centerFile, projectId]);
 
   const handleNewSession = useCallback(() => {
     setMessages([]);
@@ -294,35 +293,56 @@ export default function App() {
 
   const handleCreateFile = useCallback(async (filePath: string) => {
     try {
-      await writeFile(filePath, '');
+      await writeFile(filePath, '', projectId);
       refreshFiles();
     } catch (err: any) {
       setError(`Failed to create file: ${err.message}`);
     }
-  }, [refreshFiles]);
+  }, [projectId, refreshFiles]);
 
   const handleCreateFolder = useCallback(async (dirPath: string) => {
     try {
-      await createDirectory(dirPath);
+      await createDirectory(dirPath, projectId);
       refreshFiles();
     } catch (err: any) {
       setError(`Failed to create folder: ${err.message}`);
     }
-  }, [refreshFiles]);
+  }, [projectId, refreshFiles]);
 
   const handleProviderChange = useCallback((newProvider: AIProvider) => {
     setProvider(newProvider);
-    if (newProvider === 'claude') {
-      setModel('claude-sonnet-4-6');
-    } else {
-      setModel('gemini-2.5-pro');
-    }
+    setModel(newProvider === 'claude' ? 'claude-sonnet-4-6' : 'gemini-2.5-pro');
   }, []);
+
+  // ---- Home view ----
+  if (view === 'home') {
+    return (
+      <HomePage
+        onOpenProject={handleOpenProject}
+        onToggleDark={() => setDark(d => !d)}
+        dark={dark}
+      />
+    );
+  }
+
+  // ---- Editor view ----
+  const projectLabel = currentProject
+    ? (currentProject.bookTitle || currentProject.name)
+    : 'Editor';
 
   return (
     <div className="app-container">
       <div className="app-header">
-        <h1>The Basilisk</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: '0.8rem', padding: '2px 4px' }}
+            onClick={() => setView('home')}
+            title="Back to projects"
+          >
+            ← Projects
+          </button>
+          <h1>{projectLabel}</h1>
+        </div>
         <div className="app-header-controls">
           <button className="dark-toggle" onClick={() => setDark(!dark)}>
             {dark ? 'Light' : 'Dark'}

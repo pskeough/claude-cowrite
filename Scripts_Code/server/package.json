@@ -5,17 +5,24 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "benchmark":       "tsx src/benchmarks/editBenchmark.ts",
+    "analyze:tokens":  "tsx src/benchmarks/analyzeTokens.ts",
+    "analyze:spawn":   "tsx src/benchmarks/benchmarkSpawn.ts",
+    "analyze:diff":    "tsx src/benchmarks/benchmarkDiff.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.94.0",
     "cors": "^2.8.5",
     "diff": "^7.0.0",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/diff": "^6.0.0",
     "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

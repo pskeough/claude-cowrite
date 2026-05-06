@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { sendToClaude } from '../services/claudeService.js';
 import { sendToGemini } from '../services/geminiService.js';
+import { runDirectEdit } from '../services/claudeDirectService.js';
+import { getBookRoot } from '../config.js';
+import { getProject } from '../services/projectService.js';
 
 const router = Router();
 
@@ -9,7 +12,9 @@ router.post('/', async (req, res) => {
     mode, message,
     centerPaneFile, leftPaneFile,
     history, model, provider,
-    sessionId, // optional: resume a prior session
+    sessionId,
+    directMode,
+    projectId,    // optional: scope file I/O to this project
   } = req.body;
 
   if (!mode || !message) {
@@ -31,15 +36,29 @@ router.post('/', async (req, res) => {
     (res as any).flush?.();
   };
 
-  console.log(`[route] AI request: provider=${provider || 'claude'}, mode=${mode}, session=${sessionId ?? 'new'}, message="${message.slice(0, 80)}..."`);
-
   const abort = new AbortController();
   req.on('close', () => {
     if (!res.writableEnded) {
-      console.log(`[route] Client disconnected — aborting subprocess`);
+      console.log(`[route] Client disconnected — aborting`);
       abort.abort();
     }
   });
+
+  // Resolve project context
+  const bookRoot = getBookRoot(projectId);
+  let bookTitle = 'The Basilisk';
+  if (projectId && projectId !== 'builtin') {
+    try {
+      const project = await getProject(projectId);
+      bookTitle = project.bookTitle || project.name;
+    } catch {
+      // project not found, use default
+    }
+  }
+
+  const projectOptions = { bookRoot, bookTitle, projectId };
+
+  console.log(`[route] AI: provider=${provider || 'claude'}, mode=${mode}, project=${projectId ?? 'builtin'}, session=${sessionId ?? 'new'}, msg="${message.slice(0, 60)}..."`);
 
   try {
     const requestOptions = {
@@ -50,23 +69,33 @@ router.post('/', async (req, res) => {
       history: Array.isArray(history) ? history : [],
       model: typeof model === 'string' ? model : undefined,
       sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+      projectOptions,
     };
 
     let response;
     if (provider === 'gemini') {
-      // Gemini still uses the old API shape (centerPaneContent injected)
       response = await sendToGemini(
         { ...requestOptions, centerPaneContent: req.body.centerPaneContent, leftPaneContent: req.body.leftPaneContent },
         (event) => emit(event),
         abort.signal,
       );
+    } else if (mode === 'edit' && directMode && centerPaneFile) {
+      const result = await runDirectEdit(
+        {
+          message,
+          centerPaneFile,
+          bookRoot,
+          bookTitle,
+          model: model === 'claude-opus-4-6' ? 'opus' : 'sonnet',
+        },
+        (event) => emit(event),
+      );
+      response = result;
     } else {
       response = await sendToClaude(requestOptions, (event) => emit(event), abort.signal);
     }
 
-    // Context mode: Claude uses its Write tool to save files directly on disk.
-    // No server-side file writing needed here.
-    console.log(`[route] AI done: type=${response.type}, session=${(response as any).sessionId ?? 'none'}`);
+    console.log(`[route] Done: type=${response.type}, session=${(response as any).sessionId ?? 'none'}`);
     emit({ type: 'done', response });
   } catch (err: any) {
     console.error(`[route] AI error:`, err.message);
