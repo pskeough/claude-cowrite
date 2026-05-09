@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { sendToClaude } from '../services/claudeService.js';
-import { sendToGemini } from '../services/geminiService.js';
 import { runDirectEdit } from '../services/claudeDirectService.js';
 import { getBookRoot } from '../config.js';
 import { getProject } from '../services/projectService.js';
@@ -11,7 +10,7 @@ router.post('/', async (req, res) => {
   const {
     mode, message,
     centerPaneFile, leftPaneFile,
-    history, model, provider,
+    history, model,
     sessionId,
     directMode,
     projectId,    // optional: scope file I/O to this project
@@ -46,8 +45,8 @@ router.post('/', async (req, res) => {
 
   // Resolve project context
   const bookRoot = getBookRoot(projectId);
-  let bookTitle = 'The Basilisk';
-  if (projectId && projectId !== 'builtin') {
+  let bookTitle = 'Untitled Project';
+  if (projectId) {
     try {
       const project = await getProject(projectId);
       bookTitle = project.bookTitle || project.name;
@@ -58,7 +57,7 @@ router.post('/', async (req, res) => {
 
   const projectOptions = { bookRoot, bookTitle, projectId };
 
-  console.log(`[route] AI: provider=${provider || 'claude'}, mode=${mode}, project=${projectId ?? 'builtin'}, session=${sessionId ?? 'new'}, msg="${message.slice(0, 60)}..."`);
+  console.log(`[route] AI: mode=${mode}, project=${projectId ?? 'none'}, session=${sessionId ?? 'new'}, msg="${message.slice(0, 60)}..."`);
 
   try {
     const requestOptions = {
@@ -73,13 +72,7 @@ router.post('/', async (req, res) => {
     };
 
     let response;
-    if (provider === 'gemini') {
-      response = await sendToGemini(
-        { ...requestOptions, centerPaneContent: req.body.centerPaneContent, leftPaneContent: req.body.leftPaneContent },
-        (event) => emit(event),
-        abort.signal,
-      );
-    } else if (mode === 'edit' && directMode && centerPaneFile) {
+    if (mode === 'edit' && directMode && centerPaneFile) {
       const result = await runDirectEdit(
         {
           message,

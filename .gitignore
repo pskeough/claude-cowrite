@@ -19,3 +19,6 @@ ProjectContextFiles/
 # Secrets
 .env
 secrets.json
+
+# User project data
+Projects/

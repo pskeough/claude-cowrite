@@ -1,14 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
-import Anthropic from '@anthropic-ai/sdk';
 import { getProjectPaths, getProject, updateProjectStatus } from './projectService.js';
 import type { ProjectPaths } from './projectService.js';
-
-const MODEL_IDS = {
-  haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6',
-  opus:   'claude-opus-4-6',
-} as const;
+import { claudeCli } from './cliService.js';
 
 export interface AnalysisOptions {
   plotAnalysis: boolean;
@@ -17,9 +11,6 @@ export interface AnalysisOptions {
   model: 'haiku' | 'sonnet' | 'opus';
 }
 
-// In-memory progress per project (cleared when complete)
-const progressMap = new Map<string, JobProgress>();
-
 export interface JobProgress {
   currentTask: string;
   tasksTotal: number;
@@ -27,6 +18,8 @@ export interface JobProgress {
   errors: string[];
   complete: boolean;
 }
+
+const progressMap = new Map<string, JobProgress>();
 
 export function getProgress(projectId: string): JobProgress | undefined {
   return progressMap.get(projectId);
@@ -115,59 +108,37 @@ async function runAnalysis(projectId: string, options: AnalysisOptions, progress
   progress.complete = true;
 }
 
-// --- Generic chapter-by-chapter + synthesis helper ---
-
 async function chapterByChapterAnalysis(
   chapterFiles: string[],
   chaptersDir: string,
-  systemPrompt: string,
+  systemContext: string,
   perChapterPrompt: (label: string, content: string) => string,
-  synthesisPrompt: (perChapterResults: string) => string,
+  synthesisPrompt: (combined: string) => string,
   model: 'haiku' | 'sonnet' | 'opus',
   onProgress: (msg: string) => void,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
-  const client = new Anthropic({ apiKey });
-  const modelId = MODEL_IDS[model];
-
   const perChapterResults: string[] = [];
 
   for (const filename of chapterFiles) {
     onProgress(`Processing ${filename}...`);
     const raw = await fs.readFile(path.join(chaptersDir, filename), 'utf-8');
-    // Truncate very long chapters to stay within token budget
     const content = raw.length > 14000 ? raw.slice(0, 14000) + '\n[...truncated]' : raw;
     const label = filename.replace(/\.txt$/, '');
 
-    const response = await client.messages.create({
-      model: modelId,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: perChapterPrompt(label, content) }],
-    });
-    const text = response.content.find(b => b.type === 'text')?.text ?? '';
+    const prompt = `${systemContext}\n\n${perChapterPrompt(label, content)}`;
+    const text = await claudeCli(prompt, model, 120_000);
     perChapterResults.push(`## ${label}\n\n${text}`);
   }
 
-  // Synthesis step — combine all per-chapter analyses into one document
   onProgress('Synthesizing final document...');
   const combined = perChapterResults.join('\n\n---\n\n');
-  const truncatedForSynthesis = combined.length > 48000
+  const truncated = combined.length > 48000
     ? combined.slice(0, 48000) + '\n\n[...additional chapters truncated]'
     : combined;
 
-  const synthResponse = await client.messages.create({
-    model: modelId,
-    max_tokens: 4096,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: synthesisPrompt(truncatedForSynthesis) }],
-  });
-
-  return synthResponse.content.find(b => b.type === 'text')?.text ?? '';
+  const prompt = `${systemContext}\n\n${synthesisPrompt(truncated)}`;
+  return claudeCli(prompt, model, 180_000);
 }
-
-// --- Analysis task implementations ---
 
 async function analyzePlot(
   chapterFiles: string[],
@@ -224,7 +195,6 @@ async function analyzeVoice(
   model: 'haiku' | 'sonnet' | 'opus',
   progress: JobProgress,
 ): Promise<void> {
-  // Sample strategically for voice: first, middle, last chapter
   const sampleFiles = chapterFiles.length > 4
     ? [
         chapterFiles[0],
@@ -245,7 +215,6 @@ async function analyzeVoice(
     (msg) => { progress.currentTask = msg; },
   );
 
-  // Save to EditorialGuidance_Directions so the editor auto-loads it
   const header = `# Authorial Voice & Ghost-Writing Context\n\n*${bookTitle}*  \nGenerated: ${new Date().toLocaleString()} · Model: ${model}\n\n---\n\n`;
   await fs.writeFile(
     path.join(paths.editorial, 'authorial_voice_context.md'),

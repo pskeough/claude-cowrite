@@ -41,9 +41,6 @@ export default function ProjectCard({ project, onOpen }: Props) {
     <div className="project-card" onClick={() => onOpen(project)}>
       <div className="project-card-header">
         <span className="project-card-name">{project.bookTitle || project.name}</span>
-        {project.id === 'builtin' && (
-          <span className="project-card-builtin-badge">Legacy</span>
-        )}
       </div>
 
       {project.description && (

@@ -7,7 +7,7 @@ import {
   type HistoryMessage,
   type ProjectOptions,
 } from './promptBuilder.js';
-import { computeWordDiffAsync, type DiffChunk } from './diffService.js';
+import { computeWordDiff, type DiffChunk } from './diffService.js';
 import { readFile as readProjectFile } from './fileService.js';
 import { PROJECT_ROOT, BOOK_ROOT } from '../config.js';
 
@@ -319,7 +319,7 @@ export async function sendToClaude(
     }
 
     if (revisedText !== originalText) {
-      const diffs = await computeWordDiffAsync(originalText, revisedText);
+      const diffs = computeWordDiff(originalText, revisedText);
       return {
         type: 'edit_proposal',
         explanation: explanation || 'Edits applied.',

@@ -1,18 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import Anthropic from '@anthropic-ai/sdk';
 import { getProjectPaths, updateProjectStatus } from './projectService.js';
-
-const MODEL_IDS = {
-  haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-6',
-  opus:   'claude-opus-4-6',
-} as const;
+import { claudeCli } from './cliService.js';
 
 interface ChapterPattern {
   type: 'day' | 'chapter' | 'part' | 'section';
-  pattern: string;  // regex string to match headings
-  label: string;    // display label e.g. "Day {n}"
+  pattern: string;
+  label: string;
 }
 
 interface ChapterEntry {
@@ -26,50 +20,36 @@ export interface SplitResult {
   chapterFiles: string[];
 }
 
-// Ask Claude to detect the structural heading pattern from a small sample.
 async function detectChapterPattern(
   sample: string,
   model: 'haiku' | 'sonnet' | 'opus',
 ): Promise<ChapterPattern> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
-  const client = new Anthropic({ apiKey });
-
-  const response = await client.messages.create({
-    model: MODEL_IDS[model],
-    max_tokens: 256,
-    system: 'You are a book structure analyzer. Return ONLY a valid JSON object with no markdown or explanation.',
-    messages: [{
-      role: 'user',
-      content: `Analyze this book text sample and identify the pattern used for chapter or section headings.
+  const prompt = `Analyze this book text sample and identify the pattern used for chapter or section headings.
 
 Text sample:
 ${sample.slice(0, 6000)}
 
-Return JSON exactly:
+Return ONLY a valid JSON object with no markdown, code fences, or explanation:
 {
   "type": "day|chapter|part|section",
-  "pattern": "regex to match headings at start of line, e.g. ^Day \\\\d+ or ^Chapter \\\\d+ or ^PART [IVX]+ or ^\\\\*\\\\*\\\\*",
+  "pattern": "regex to match headings at start of line, e.g. ^Day \\\\d+ or ^Chapter \\\\d+ or ^PART [IVX]+",
   "label": "human label e.g. Day {n} or Chapter {n}"
 }
 
-If no clear pattern exists, return: {"type":"section","pattern":"^\\\\*\\\\*\\\\*|^---","label":"Section {n}"}`,
-    }],
-  });
+If no clear structural pattern exists, return: {"type":"section","pattern":"^\\\\*\\\\*\\\\*|^---","label":"Section {n}"}`;
 
-  const raw = response.content.find(b => b.type === 'text')?.text ?? '{}';
   try {
+    const raw = await claudeCli(prompt, model, 60_000);
     const cleaned = raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned) as ChapterPattern;
-    // Validate we got required fields
-    if (!parsed.pattern || !parsed.type) throw new Error('incomplete');
+    if (!parsed.pattern || !parsed.type) throw new Error('incomplete response');
     return parsed;
-  } catch {
+  } catch (e) {
+    console.warn('[split] Pattern detection failed, using default:', e);
     return { type: 'chapter', pattern: '^Chapter \\d+', label: 'Chapter {n}' };
   }
 }
 
-// Split text into chapter entries using a detected heading pattern.
 function splitByPattern(content: string, pattern: ChapterPattern): ChapterEntry[] {
   const lines = content.split('\n');
   let regex: RegExp;
@@ -90,13 +70,11 @@ function splitByPattern(content: string, pattern: ChapterPattern): ChapterEntry[
   }
 
   if (headingIndices.length === 0) {
-    // No headings found — wrap entire content as a single file
     return [{ label: 'Full Book', filename: 'full_book.txt', content }];
   }
 
   const chapters: ChapterEntry[] = [];
 
-  // Include any preamble before the first heading
   if (headingIndices[0] > 5) {
     const preamble = lines.slice(0, headingIndices[0]).join('\n').trim();
     if (preamble.length > 100) {
@@ -111,7 +89,6 @@ function splitByPattern(content: string, pattern: ChapterPattern): ChapterEntry[
     const num = String(i + 1).padStart(2, '0');
     const headingLabel = headingLabels[i];
 
-    // Build a safe filename from the heading
     const slug = headingLabel
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
@@ -134,7 +111,6 @@ export async function splitBookIntoChapters(
   model: 'haiku' | 'sonnet' | 'opus' = 'sonnet',
 ): Promise<SplitResult> {
   const paths = getProjectPaths(projectId);
-
   await updateProjectStatus(projectId, { splitChapters: 'running' });
 
   try {
@@ -145,7 +121,6 @@ export async function splitBookIntoChapters(
 
     const chapters = splitByPattern(bookContent, pattern);
 
-    // Ensure Chapters/Current/ directory exists
     await fs.mkdir(paths.chapters, { recursive: true });
 
     const chapterFiles: string[] = [];

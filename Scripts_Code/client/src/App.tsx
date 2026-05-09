@@ -5,7 +5,7 @@ import CenterPane from './components/CenterPane/CenterPane';
 import RightPane from './components/RightPane/RightPane';
 import HomePage from './components/Home/HomePage';
 import { listFiles, readFile, writeFile, createDirectory, sendMessage } from './api';
-import type { FileNode, Mode, AIProvider, AIModel, ChatMessage, EditProposal, ProcessEvent, Project } from './types';
+import type { FileNode, Mode, AIModel, ChatMessage, EditProposal, ProcessEvent, Project } from './types';
 
 type AppView = 'home' | 'editor';
 type ModeSessions = Record<Mode, string | null>;
@@ -38,7 +38,6 @@ export default function App() {
 
   // Right pane state
   const [mode, setMode] = useState<Mode>('analysis');
-  const [provider, setProvider] = useState<AIProvider>('claude');
   const [model, setModel] = useState<AIModel>('claude-sonnet-4-6');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -226,7 +225,6 @@ export default function App() {
         leftFile || undefined,
         messages,
         model,
-        provider,
         currentSessionId,
         wrappedOnProcess,
         projectId,
@@ -268,7 +266,7 @@ export default function App() {
       setLoading(false);
       setStreamingText('');
     }
-  }, [mode, provider, model, messages, sessions, centerFile, leftFile, projectId, refreshFiles]);
+  }, [mode, model, messages, sessions, centerFile, leftFile, projectId, refreshFiles]);
 
   const handleApplyDiff = useCallback(async (finalText: string) => {
     setEditProposal(null);
@@ -308,11 +306,6 @@ export default function App() {
       setError(`Failed to create folder: ${err.message}`);
     }
   }, [projectId, refreshFiles]);
-
-  const handleProviderChange = useCallback((newProvider: AIProvider) => {
-    setProvider(newProvider);
-    setModel(newProvider === 'claude' ? 'claude-sonnet-4-6' : 'gemini-2.5-pro');
-  }, []);
 
   // ---- Home view ----
   if (view === 'home') {
@@ -378,6 +371,7 @@ export default function App() {
               contentVersion={contentVersion}
               saveStatus={saveStatus}
               editProposal={editProposal}
+              project={currentProject}
               onSelectFile={handleCenterFileSelect}
               onContentChange={handleContentChange}
               onApplyDiff={handleApplyDiff}
@@ -386,13 +380,11 @@ export default function App() {
           right={
             <RightPane
               mode={mode}
-              provider={provider}
               model={model}
               messages={messages}
               loading={loading}
               streamingText={streamingText}
               onModeChange={handleModeChange}
-              onProviderChange={handleProviderChange}
               onModelChange={setModel}
               onSend={handleSend}
               onNewSession={handleNewSession}

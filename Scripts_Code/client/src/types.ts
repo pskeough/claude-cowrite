@@ -52,11 +52,7 @@ export interface FileNode {
 
 export type Mode = 'analysis' | 'context' | 'edit';
 
-export type AIProvider = 'claude' | 'gemini';
-
-export type ClaudeModel = 'claude-opus-4-6' | 'claude-sonnet-4-6' | 'claude-haiku-4-5-20251001';
-export type GeminiModel = 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3.1-flash-lite-preview';
-export type AIModel = ClaudeModel | GeminiModel;
+export type AIModel = 'claude-opus-4-6' | 'claude-sonnet-4-6' | 'claude-haiku-4-5-20251001';
 
 export interface ProcessEvent {
   type: 'tool_call' | 'tool_result' | 'text_delta' | 'cost_info';

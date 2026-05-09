@@ -1,5 +1,5 @@
 import type {
-  FileNode, Mode, AIProvider, AIModel, ClaudeResponse, ChatMessage, ProcessEvent,
+  FileNode, Mode, AIModel, ClaudeResponse, ChatMessage, ProcessEvent,
   Project, ProjectAnalysisConfig,
 } from './types';
 
@@ -50,7 +50,6 @@ export async function sendMessage(
   leftPaneFile?: string,
   history: ChatMessage[] = [],
   model?: AIModel,
-  provider?: AIProvider,
   sessionId?: string,
   onProcess?: (event: ProcessEvent) => void,
   projectId?: string,
@@ -59,7 +58,7 @@ export async function sendMessage(
     .slice(-6)
     .map(({ role, content }) => ({ role, content: content.slice(0, 2000) }));
 
-  const directMode = mode === 'edit' && provider !== 'gemini';
+  const directMode = mode === 'edit';
 
   const res = await fetch(`${BASE}/ai`, {
     method: 'POST',
@@ -71,7 +70,6 @@ export async function sendMessage(
       leftPaneFile,
       history: trimmedHistory,
       model,
-      provider,
       sessionId,
       directMode,
       projectId,
@@ -194,4 +192,29 @@ export async function queueProjectAnalysis(
     const err = await res.json().catch(() => ({ error: 'Failed to queue analysis' }));
     throw new Error(err.error || 'Failed to queue analysis');
   }
+}
+
+
+// ---- Auth ----
+
+export interface AuthStatus {
+  installed: boolean;
+  version?: string;
+  error?: string;
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const res = await fetch(`${BASE}/auth/status`);
+  if (!res.ok) return { installed: false, error: 'Server error' };
+  return res.json();
+}
+
+export async function launchClaudeLogin(): Promise<{ launched: boolean; message?: string }> {
+  const res = await fetch(`${BASE}/auth/login`, { method: 'POST' });
+  return res.json();
+}
+
+export async function installClaudeCode(): Promise<{ installed: boolean; message?: string; error?: string }> {
+  const res = await fetch(`${BASE}/auth/install`, { method: 'POST' });
+  return res.json();
 }

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import ProseEditor from './ProseEditor';
 import DiffView from './DiffView';
-import type { FileNode, EditProposal } from '../../types';
+import ProjectDashboard from './ProjectDashboard';
+import type { FileNode, EditProposal, Project } from '../../types';
 
 interface Props {
   files: FileNode[];
@@ -10,6 +11,7 @@ interface Props {
   contentVersion: number;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   editProposal: EditProposal | null;
+  project: Project | null;
   onSelectFile: (path: string) => void;
   onContentChange: (content: string) => void;
   onApplyDiff: (finalText: string) => void;
@@ -51,7 +53,7 @@ function flattenChapterFiles(nodes: FileNode[]): { label: string; path: string }
 }
 
 export default function CenterPane({
-  files, selectedFile, content, contentVersion, saveStatus, editProposal,
+  files, selectedFile, content, contentVersion, saveStatus, editProposal, project,
   onSelectFile, onContentChange, onApplyDiff,
 }: Props) {
   const chapterFiles = flattenChapterFiles(files);
@@ -110,6 +112,8 @@ export default function CenterPane({
           />
         ) : selectedFile ? (
           <ProseEditor key={`${selectedFile}-v${contentVersion}`} content={content} onChange={onContentChange} />
+        ) : project ? (
+          <ProjectDashboard project={project} files={files} onSelectFile={onSelectFile} />
         ) : (
           <div className="empty-state">
             Select a chapter to begin editing

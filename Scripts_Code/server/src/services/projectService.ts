@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { PROJECTS_DIR, BOOK_ROOT } from '../config.js';
+import { PROJECTS_DIR } from '../config.js';
 
 export interface ProjectAnalysisConfig {
   splitChapters: boolean;
@@ -126,50 +126,17 @@ export async function listProjects(): Promise<Project[]> {
     }
   }
 
-  // Inject the builtin legacy project if BookFiles/RokosBasilisk exists
-  try {
-    await fs.access(BOOK_ROOT);
-    projects.unshift({
-      id: 'builtin',
-      name: 'The Basilisk',
-      description: 'Roko\'s Basilisk — the original manuscript project.',
-      bookTitle: 'The Basilisk',
-      author: 'Patrick Keough',
-      created: '2024-01-01T00:00:00Z',
-      analysisConfig: { splitChapters: false, plotAnalysis: false, characterProfiles: false, voiceContext: false, model: 'sonnet' },
-      status: { splitChapters: 'done', plotAnalysis: 'none', characterProfiles: 'none', voiceContext: 'none' },
-    });
-  } catch {
-    // builtin path doesn't exist — skip
-  }
-
-  return projects.sort((a, b) => {
-    // builtin always first
-    if (a.id === 'builtin') return -1;
-    if (b.id === 'builtin') return 1;
-    return new Date(b.created).getTime() - new Date(a.created).getTime();
-  });
+  return projects.sort((a, b) =>
+    new Date(b.created).getTime() - new Date(a.created).getTime(),
+  );
 }
 
 export async function getProject(id: string): Promise<Project> {
-  if (id === 'builtin') {
-    return {
-      id: 'builtin',
-      name: 'The Basilisk',
-      description: 'Roko\'s Basilisk — the original manuscript project.',
-      bookTitle: 'The Basilisk',
-      author: 'Patrick Keough',
-      created: '2024-01-01T00:00:00Z',
-      analysisConfig: { splitChapters: false, plotAnalysis: false, characterProfiles: false, voiceContext: false, model: 'sonnet' },
-      status: { splitChapters: 'done', plotAnalysis: 'none', characterProfiles: 'none', voiceContext: 'none' },
-    };
-  }
   const content = await fs.readFile(path.join(PROJECTS_DIR, id, 'project.json'), 'utf-8');
   return JSON.parse(content) as Project;
 }
 
 export async function updateProject(id: string, updates: Partial<Project>): Promise<Project> {
-  if (id === 'builtin') return getProject(id); // read-only
   const project = await getProject(id);
   const updated: Project = { ...project, ...updates };
   await saveProject(updated);
@@ -177,7 +144,6 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
 }
 
 export async function updateProjectStatus(id: string, statusUpdates: Partial<ProjectStatus>): Promise<Project> {
-  if (id === 'builtin') return getProject(id);
   const project = await getProject(id);
   const updated: Project = { ...project, status: { ...project.status, ...statusUpdates } };
   await saveProject(updated);

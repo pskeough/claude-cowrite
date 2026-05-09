@@ -18,7 +18,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import fs from 'fs/promises';
 import path from 'path';
 import { EDITORIAL_DIR, BOOK_ROOT, PROJECT_ROOT, getEditorialDir } from '../config.js';
-import { computeWordDiffAsync, type DiffChunk } from './diffService.js';
+import { computeWordDiff, type DiffChunk } from './diffService.js';
 import { readFile as readProjectFile } from './fileService.js';
 import { toRelativePath } from './promptBuilder.js';
 import type { ProcessEvent } from './claudeService.js';
@@ -389,7 +389,7 @@ export async function runDirectEdit(
 
   onEvent?.({ type: 'text_delta', text: explanation });
 
-  const diffs = await computeWordDiffAsync(originalText, revisedText);
+  const diffs = computeWordDiff(originalText, revisedText);
 
   return {
     type: 'edit_proposal',
