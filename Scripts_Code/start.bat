@@ -1,14 +1,14 @@
 @echo off
+cd /d "%~dp0"
 echo Starting Basilisk Editor...
 echo.
 
-:: Check for Gemini CLI
-where gemini >nul 2>&1
+:: Check for Claude CLI (required)
+where claude >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo Gemini CLI not found. Installing globally...
-    call npm install -g @google/gemini-cli
-    echo Opening Gemini authentication...
-    call gemini login
+    echo ERROR: Claude CLI not found. Install it from https://claude.ai/code
+    pause
+    exit /b 1
 )
 
 if not exist "server\node_modules" (
@@ -30,7 +30,10 @@ echo Starting server on http://localhost:3001
 echo Starting client on http://localhost:5173
 echo.
 
-start "Basilisk Server" cmd /c "cd server && npm run dev"
-start "Basilisk Client" cmd /c "cd client && npm run dev"
+start "Basilisk Server" cmd /k "cd /d "%~dp0server" && npm run dev"
+start "Basilisk Client" cmd /k "cd /d "%~dp0client" && npm run dev"
 
-echo Both processes started. Close the terminal windows to stop.
+timeout /t 3 /nobreak >nul
+start http://localhost:5173
+
+echo Browser opened. Close the server and client windows to stop.
