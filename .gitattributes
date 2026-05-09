@@ -1,0 +1,7 @@
+# Force LF line endings for shell scripts so Mac/Linux execution works
+# regardless of the OS the file was last touched on.
+*.sh         text eol=lf
+*.command    text eol=lf
+
+# Force CRLF for Windows batch files
+*.bat        text eol=crlf
