@@ -1,4 +1,4 @@
-import type { FileNode, Mode, AIProvider, AIModel, ClaudeResponse, ChatMessage, ProcessEvent } from './types';
+import type { FileNode, Mode, AIProvider, AIModel, ClaudeResponse, ChatMessage, ProcessEvent, AnalysisEvent, PipelineStatus } from './types';
 
 const BASE = '/api';
 
@@ -91,4 +91,71 @@ export async function sendMessage(
   }
 
   throw new Error('Stream ended without a response');
+}
+
+export function startAnalysisPipeline(
+  options: {
+    manuscriptPath: string;
+    analysisTypes?: string[];
+    model: string;
+    chunkSize: number;
+    resume?: boolean;
+  },
+  onEvent: (event: AnalysisEvent) => void,
+): { abort: () => void } {
+  const controller = new AbortController();
+
+  (async () => {
+    const res = await fetch(`${BASE}/analysis/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+      signal: controller.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({ error: 'Failed to start analysis' }));
+      onEvent({ type: 'error', error: err.error, recoverable: false });
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() ?? '';
+      for (const chunk of chunks) {
+        const line = chunk.trim();
+        if (!line.startsWith('data: ')) continue;
+        try {
+          onEvent(JSON.parse(line.slice(6)) as AnalysisEvent);
+        } catch { /* non-JSON */ }
+      }
+    }
+  })().catch(err => {
+    if (!controller.signal.aborted) {
+      onEvent({ type: 'error', error: err.message, recoverable: false });
+    }
+  });
+
+  return { abort: () => controller.abort() };
+}
+
+export async function getAnalysisStatus(): Promise<PipelineStatus | null> {
+  try {
+    const res = await fetch(`${BASE}/analysis/status`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelAnalysis(): Promise<void> {
+  await fetch(`${BASE}/analysis/cancel`, { method: 'DELETE' }).catch(() => {});
 }

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import filesRouter from './routes/files.js';
 import claudeRouter from './routes/claude.js';
+import analysisRouter from './routes/analysis.js';
 import { getProjectContext } from './services/fileService.js';
 import { PORT } from './config.js';
 
@@ -22,6 +23,7 @@ app.get('/api/project-context', async (_req, res) => {
 
 app.use('/api/files', filesRouter);
 app.use('/api/ai', claudeRouter);
+app.use('/api/analysis', analysisRouter);
 
 app.listen(PORT, () => {
   console.log(`Basilisk Editor server running on http://localhost:${PORT}`);

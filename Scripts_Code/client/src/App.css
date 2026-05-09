@@ -694,6 +694,343 @@ body.dark .nav-arrow:hover {
   color: #7aa0d4;
 }
 
+/* Analyze button in left pane header */
+.pane-analyze-btn {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+  white-space: nowrap;
+}
+
+.pane-analyze-btn:hover {
+  border-color: #4a6fa5;
+  color: #4a6fa5;
+}
+
+body.dark .pane-analyze-btn {
+  border-color: #555;
+  color: #999;
+}
+
+body.dark .pane-analyze-btn:hover {
+  border-color: #7aa0d4;
+  color: #7aa0d4;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+body.dark .modal-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* Modal box */
+.modal {
+  background: #faf9f7;
+  border: 1px solid #d8d4ce;
+  border-radius: 8px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+body.dark .modal {
+  background: #252525;
+  border-color: #3a3a3a;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e0ddd8;
+  flex-shrink: 0;
+}
+
+body.dark .modal-header {
+  border-color: #3a3a3a;
+}
+
+.modal-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: #333;
+}
+
+body.dark .modal-title {
+  color: #d0cdc8;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #555;
+}
+
+body.dark .modal-close:hover {
+  color: #ccc;
+}
+
+.modal-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-footer {
+  padding: 10px 16px;
+  border-top: 1px solid #e0ddd8;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+body.dark .modal-footer {
+  border-color: #3a3a3a;
+}
+
+/* Modal form fields */
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #777;
+}
+
+body.dark .modal-label {
+  color: #888;
+}
+
+.modal-select {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: white;
+  color: #1a1a1a;
+  width: 100%;
+}
+
+body.dark .modal-select {
+  background: #2a2a2a;
+  border-color: #555;
+  color: #e0ddd8;
+}
+
+.modal-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #333;
+}
+
+body.dark .modal-checkbox-label {
+  color: #ccc;
+}
+
+.modal-checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.modal-hint {
+  font-size: 0.75rem;
+  color: #c59b25;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body.dark .modal-hint {
+  color: #c5a825;
+}
+
+.modal-advanced-toggle {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.modal-advanced-toggle:hover {
+  color: #555;
+}
+
+body.dark .modal-advanced-toggle:hover {
+  color: #ccc;
+}
+
+.modal-range {
+  width: 100%;
+  accent-color: #4a6fa5;
+}
+
+/* Resume banner */
+.modal-resume-banner {
+  background: #f0f4fb;
+  border: 1px solid #c8d4ea;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #3a5a8a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.dark .modal-resume-banner {
+  background: #1e2a3a;
+  border-color: #2a3f5a;
+  color: #7aa0d4;
+}
+
+.modal-resume-btn {
+  background: #4a6fa5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.modal-resume-btn:hover {
+  background: #3a5f95;
+}
+
+/* Progress section */
+.modal-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-progress-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #333;
+}
+
+body.dark .modal-progress-label {
+  color: #d0cdc8;
+}
+
+.modal-progress-counter {
+  font-weight: 400;
+  color: #888;
+}
+
+.modal-progress-bar {
+  height: 4px;
+  background: #e0ddd8;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+body.dark .modal-progress-bar {
+  background: #3a3a3a;
+}
+
+.modal-progress-fill {
+  height: 100%;
+  background: #4a6fa5;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.modal-progress-summary {
+  font-size: 0.75rem;
+  color: #888;
+  font-family: 'Courier New', monospace;
+}
+
+/* Types done badges */
+.modal-types-done {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.modal-type-badge {
+  font-size: 0.75rem;
+  background: #e8f0e8;
+  color: #3a7a3a;
+  border: 1px solid #b8d8b8;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+body.dark .modal-type-badge {
+  background: #1e2e1e;
+  color: #7ac07a;
+  border-color: #2e4a2e;
+}
+
+/* Done note */
+.modal-done-note {
+  font-size: 0.8rem;
+  color: #777;
+  font-style: italic;
+}
+
 /* Empty state */
 .empty-state {
   display: flex;

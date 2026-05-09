@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import LeftPane from './components/LeftPane/LeftPane';
 import CenterPane from './components/CenterPane/CenterPane';
 import RightPane from './components/RightPane/RightPane';
+import AnalysisModal from './components/Analysis/AnalysisModal';
 import { listFiles, readFile, writeFile, createDirectory, sendMessage } from './api';
 import type { FileNode, Mode, AIProvider, AIModel, ChatMessage, EditProposal, ProcessEvent } from './types';
 
@@ -43,6 +44,8 @@ export default function App() {
   // Session IDs per mode — Claude Code maintains conversation context on disk,
   // we resume using the session_id returned from each call.
   const [sessions, setSessions] = useState<ModeSessions>({ analysis: null, context: null, edit: null });
+
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
   useEffect(() => {
     document.body.classList.toggle('dark', dark);
@@ -321,6 +324,15 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {showAnalysisModal && (
+        <AnalysisModal
+          files={files}
+          onClose={(shouldRefresh) => {
+            setShowAnalysisModal(false);
+            if (shouldRefresh) refreshFiles();
+          }}
+        />
+      )}
       <div className="app-header">
         <h1>The Basilisk</h1>
         <div className="app-header-controls">
@@ -348,6 +360,7 @@ export default function App() {
               onCreateFile={handleCreateFile}
               onCreateFolder={handleCreateFolder}
               onRefresh={refreshFiles}
+              onAnalyze={() => setShowAnalysisModal(true)}
             />
           }
           center={

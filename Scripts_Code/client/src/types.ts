@@ -43,6 +43,43 @@ export interface EditProposal {
   originalText: string; // kept for reject/restore — Claude already edited the file on disk
 }
 
+export interface AnalysisEvent {
+  type:
+    | 'pipeline_start' | 'pipeline_done'
+    | 'analysis_type_start' | 'analysis_type_done'
+    | 'chunk_start' | 'chunk_done'
+    | 'tool_call' | 'tool_result' | 'text_delta' | 'cost_info'
+    | 'error';
+  // pipeline_start
+  totalChunks?: number;
+  analysisTypes?: string[];
+  // chunk/type tracking
+  analysisType?: string;
+  chunkIndex?: number;
+  totalChunksForType?: number;
+  // tool events
+  tool?: string;
+  input?: Record<string, unknown>;
+  isError?: boolean;
+  text?: string;
+  costUsd?: number;
+  durationMs?: number;
+  numTurns?: number;
+  // error
+  error?: string;
+  recoverable?: boolean;
+}
+
+export interface PipelineStatus {
+  runId: string;
+  startedAt: string;
+  manuscriptPath: string;
+  totalChunks: number;
+  model: string;
+  completedTypes: string[];
+  status: 'running' | 'complete' | 'cancelled' | 'error';
+}
+
 export interface AnalysisResponse {
   type: 'analysis';
   response: string;

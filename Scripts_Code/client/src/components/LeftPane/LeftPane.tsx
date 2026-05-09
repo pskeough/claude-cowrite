@@ -15,6 +15,7 @@ interface Props {
   onCreateFile: (path: string) => Promise<void>;
   onCreateFolder: (path: string) => Promise<void>;
   onRefresh: () => void;
+  onAnalyze: () => void;
 }
 
 function getSiblingFiles(nodes: FileNode[], targetPath: string): string[] {
@@ -35,7 +36,7 @@ function getSiblingFiles(nodes: FileNode[], targetPath: string): string[] {
 
 export default function LeftPane({
   files, selectedFile, fileContent, saveStatus, contentVersion,
-  onSelectFile, onContentChange, onCreateFile, onCreateFolder, onRefresh,
+  onSelectFile, onContentChange, onCreateFile, onCreateFolder, onRefresh, onAnalyze,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'explorer' | 'viewer'>('explorer');
 
@@ -72,14 +73,23 @@ export default function LeftPane({
           </button>
         </div>
         {activeTab === 'explorer' && (
-          <button
-            onClick={onRefresh}
-            title="Refresh file tree"
-            className="nav-arrow"
-            style={{ marginLeft: 'auto' }}
-          >
-            ↺
-          </button>
+          <>
+            <button
+              onClick={onAnalyze}
+              title="Run whole-book analysis"
+              className="pane-analyze-btn"
+              style={{ marginLeft: 'auto' }}
+            >
+              Analyze
+            </button>
+            <button
+              onClick={onRefresh}
+              title="Refresh file tree"
+              className="nav-arrow"
+            >
+              ↺
+            </button>
+          </>
         )}
         {activeTab === 'viewer' && selectedFile && (
           <>
