@@ -4,6 +4,16 @@ A local book-editing environment featuring a three-pane web UI backed by Claude 
 
 Built completely around flat `.txt` files on disk, this architecture requires no databases. The folder structure itself functions as the data model.
 
+## Quick Start
+
+Clone the repository, then double-click the launcher for your OS. The launcher installs Node.js, the Claude Code CLI, and project dependencies on first run, then starts the app and opens it in your browser.
+
+- **Windows:** double-click `launch.bat` in the project root.
+- **macOS:** double-click `launch.command` in the project root. *First time only:* open Terminal in the project folder and run `chmod +x launch.command`.
+- **Linux:** run `./Scripts_Code/start.sh` from a terminal.
+
+Once the homepage loads in the browser, click **Sign In** if prompted to authenticate Claude Code.
+
 ## Core Features
 
 - **Three-Pane Interface:** Reference files on the left, an active editor in the center, and a dedicated Claude interaction panel on the right.
