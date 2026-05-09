@@ -1,65 +1,121 @@
 #!/bin/bash
-# Mac launcher for Basilisk Editor — double-click in Finder to run.
-# First-time setup: in Terminal, run `chmod +x start.command` once.
+# All-in-one Mac launcher for Basilisk Editor.
+# Bootstraps Homebrew, Node.js, Claude CLI, and project dependencies on first run.
+# Double-click in Finder to launch.
+# First-time only: in Terminal, run `chmod +x start.command` once.
 
-set -e
 cd "$(cd "$(dirname "$0")" && pwd)"
 
-echo "Starting Basilisk Editor..."
+# Pause-on-exit so a Finder double-click leaves the error visible
+error_pause() {
+  echo ""
+  echo "════════════════════════════════════════════════════════════"
+  echo "  Setup did not complete. Read the message above."
+  echo "════════════════════════════════════════════════════════════"
+  echo ""
+  read -n 1 -s -r -p "Press any key to close..."
+  exit 1
+}
+trap 'error_pause' ERR
+
+clear
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║              BASILISK EDITOR — MAC LAUNCHER                ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Check for Claude CLI (required)
-if ! command -v claude &> /dev/null; then
-    echo "ERROR: Claude CLI not found."
-    echo "Install it from https://claude.ai/code"
+# ── 1. Homebrew ─────────────────────────────────────────────────────────────
+if ! command -v brew &>/dev/null; then
+    echo "[1/5] Homebrew not found — installing now."
+    echo "      You will be prompted for your Mac password."
     echo ""
-    echo "Press any key to close..."
-    read -n 1
-    exit 1
-fi
-
-# Check for Node.js
-if ! command -v node &> /dev/null; then
-    echo "ERROR: Node.js not found."
-    echo "Install it from https://nodejs.org/"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for this session (Apple Silicon → /opt/homebrew, Intel → /usr/local)
+    if [ -x /opt/homebrew/bin/brew ]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -x /usr/local/bin/brew ]; then
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
     echo ""
-    echo "Press any key to close..."
-    read -n 1
-    exit 1
+    echo "  ✓ Homebrew installed."
+else
+    echo "[1/5] ✓ Homebrew already installed."
 fi
+echo ""
 
-# Install dependencies if needed
+# ── 2. Node.js ──────────────────────────────────────────────────────────────
+if ! command -v node &>/dev/null; then
+    echo "[2/5] Node.js not found — installing via Homebrew."
+    brew install node
+    echo "  ✓ Node.js installed."
+else
+    echo "[2/5] ✓ Node.js already installed ($(node -v))."
+fi
+echo ""
+
+# ── 3. Claude CLI ───────────────────────────────────────────────────────────
+if ! command -v claude &>/dev/null; then
+    echo "[3/5] Claude CLI not found — installing globally via npm."
+    npm install -g @anthropic-ai/claude-code
+    echo "  ✓ Claude CLI installed."
+else
+    echo "[3/5] ✓ Claude CLI already installed."
+fi
+echo ""
+
+# ── 4. Claude login (only on first run, ~/.claude doesn't exist yet) ────────
+if [ ! -d "$HOME/.claude" ]; then
+    echo "[4/5] Claude needs to be logged in (first-time setup)."
+    echo ""
+    echo "      A browser window will open for Anthropic login."
+    echo "      After logging in, return to this Terminal,"
+    echo "      type  /exit  and press Enter to continue."
+    echo ""
+    read -n 1 -s -r -p "      Press any key to start the login flow..."
+    echo ""
+    echo ""
+    claude
+    echo ""
+    echo "  ✓ Claude login complete."
+else
+    echo "[4/5] ✓ Claude already configured."
+fi
+echo ""
+
+# ── 5. Project dependencies ─────────────────────────────────────────────────
 if [ ! -d "server/node_modules" ]; then
-    echo "Installing server dependencies..."
+    echo "[5/5] Installing server dependencies (first run only)..."
     (cd server && npm install)
 fi
-
 if [ ! -d "client/node_modules" ]; then
-    echo "Installing client dependencies..."
+    echo "      Installing client dependencies (first run only)..."
     (cd client && npm install)
 fi
-
-echo ""
-echo "Starting server on http://localhost:3001"
-echo "Starting client on http://localhost:5173"
+echo "[5/5] ✓ Project dependencies ready."
 echo ""
 
-# Start both processes in the background
+# Disable error trap — server/client dev servers can exit non-zero on shutdown
+trap - ERR
+
+# ── Launch ──────────────────────────────────────────────────────────────────
+echo "════════════════════════════════════════════════════════════"
+echo "  Starting Basilisk Editor"
+echo "    server:  http://localhost:3001"
+echo "    client:  http://localhost:5173"
+echo ""
+echo "  Press Ctrl+C in this window to stop."
+echo "════════════════════════════════════════════════════════════"
+echo ""
+
 (cd server && npm run dev) &
 SERVER_PID=$!
 
 (cd client && npm run dev) &
 CLIENT_PID=$!
 
-# Trap Ctrl+C and window close to kill both children
-trap "echo ''; echo 'Shutting down...'; kill $SERVER_PID $CLIENT_PID 2>/dev/null; exit" INT TERM EXIT
+trap "echo ''; echo 'Shutting down...'; kill $SERVER_PID $CLIENT_PID 2>/dev/null; exit 0" INT TERM
 
-# Wait briefly for client to bind, then open the browser
-sleep 3
+sleep 4
 open http://localhost:5173
-
-echo ""
-echo "Browser opened. Press Ctrl+C in this window to stop both processes."
-echo ""
 
 wait
